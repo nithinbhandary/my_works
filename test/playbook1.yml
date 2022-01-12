@@ -1,0 +1,87 @@
+
+---
+- hosts: webservers
+  become: true
+  become_user: root
+  tasks:
+   - name: updateing packages
+     apt:
+      name: "*"
+      state: latest
+   - name: Install latest version of "openjdk-6-jdk" ignoring "install-recommends"
+     apt:
+      name: default-jdk
+      state: latest
+      install_recommends: no
+   - name: adding group tomcat
+     group:
+      name: tomcat
+      state: present
+   - name: Add the user tomcat to the tomcat group
+     ansible.builtin.user:
+      name: tomcat
+      group: tomcat
+   - name: Creates directory
+     file:
+      path: /opt/tomcat
+      state: directory
+   - name: download tomcat
+     get_url: 
+      url: https://dlcdn.apache.org/tomcat/tomcat-8/v8.5.73/bin/apache-tomcat-8.5.73.tar.gz
+      dest: /opt/tomcat
+   - name: untar the file
+     ansible.builtin.command: sudo tar xzvf /opt/tomcat/apache-tomcat-8.5.73.tar.gz -C /opt/tomcat --strip-components=1
+   - name: Change file ownership, group and permissions
+     ansible.builtin.file:
+      path: /opt/tomcat
+      owner: tomcat
+      group: tomcat
+      recurse: yes
+      mode: '777'
+   - name: change permission
+     ansible.builtin.command: sudo chmod -R g+r /opt/tomcat/conf
+   - name: change permission
+     ansible.builtin.command: sudo chmod g+x /opt/tomcat/conf
+   - name: Change file ownership, group and permissions
+     ansible.builtin.file:
+      path: /opt/tomcat/webapps/work/temp/logs/
+      owner: tomcat
+      group: tomcat
+      recurse: yes
+      mode: '777' 
+   - name: add code to the file
+     copy:
+      dest: /etc/systemd/system/tomcat.service
+      content: |
+       [Unit]
+       Description=Apache Tomcat Web Application Container
+       After=network.targetd
+       
+       [Service]
+       Type=forking
+       Environment=JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+       Environment=CATALINA_PID=/opt/tomcat/temp/tomcat.pid
+       Environment=CATALINA_HOME=/opt/tomcat
+       Environment=CATALINA_BASE=/opt/tomcat
+       Environment='CATALINA_OPTS=-Xms512M -Xmx1024M -server -XX:+UseParallelGC'
+       Environment='JAVA_OPTS=-Djava.awt.headless=true -
+       Djava.security.egd=file:/dev/./urandom'
+
+       ExecStart=/opt/tomcat/bin/startup.sh
+       ExecStop=/opt/tomcat/bin/shutdown.sh
+
+       User=tomcat
+       Group=tomcat
+       UMask=0007
+       RestartSec=10
+       Restart=always
+
+       [Install]
+       WantedBy=multi-user.target
+   - name: Run command 
+     ansible.builtin.command: sudo systemctl daemon-reload
+   - name: start tomcat
+     service:
+      name: tomcat
+      state: started
+
